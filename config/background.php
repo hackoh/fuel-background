@@ -11,6 +11,9 @@
  * @link       http://github.com/hackoh
  */
 
-return array();
+return array(
+	'php' => 'php',
+	'oil_path_from_apppath' => '../../oil',
+);
 
 /* End of file background.php */

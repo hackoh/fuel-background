@@ -21,7 +21,6 @@ class Background
 	protected $_arguments;
 	protected $_created_at;
 	protected $_completed_at;
-	protected $_exception;
 
 	protected $_events = array(
 		'before' => array(),
@@ -30,6 +29,11 @@ class Background
 		'error' => array(),
 		'exception' => array(),
 	);
+
+	public static function _init()
+	{
+		\Config::load('background', true);
+	}
 
 	public static function forge($handler, $arguments = array())
 	{
@@ -60,31 +64,82 @@ class Background
 		return $var;
 	}
 
+	protected static function _queue()
+	{
+		try
+		{
+			$queue = \Cache::get('background.queue');
+		}
+		catch (\Exception $e)
+		{
+			$queue = array();
+		}
+
+		return (array) $queue;
+	}
+
+	protected static function _push($background)
+	{
+		$queue = static::_queue();
+		$queue[$background->_id] = $background;
+		\Cache::set('background.queue', $queue);
+	}
+
+	public static function end($id)
+	{
+		$queue = static::_queue();
+		\Arr::delete($queue, $id);
+		\Cache::set('background.queue', $queue);
+
+		if ($queue)
+		{
+			$background = current($queue);
+			$background->_run();
+		}
+	}
+
 	public function __construct($handler, $arguments = array())
 	{
+		$id = \Str::random('unique');
+		$this->_id = $id;
 		$this->_handler = static::_to_callable($handler);
 		$this->set_arguments($arguments);
 	}
 
+	public function queue()
+	{
+		$this->on('after', function($id) {
+			Background::end($id);
+		}, array($this->_id));
+
+		$queue = static::_queue();
+		if ( ! count($queue))
+		{
+			$this->run();
+		}
+		static::_push($this);
+	}
+
 	public function run()
 	{
-		$id = \Str::random('unique');
-		$this->_id = $id;
 		$this->_created_at = time();
 
-		\Cache::set('background.'.$id, $this);
+		\Cache::set('background.'.$this->_id, $this);
+
+		$php = \Config::get('background.php', 'php');
+		$oil = \Config::get('background.oil_path_from_apppath', '../../oil');
 
 		// Check OS
 		if (PHP_OS !== 'WIN32' && PHP_OS !== 'WINNT')
 		{
 			// Unix-based OS
-			$command = 'FUEL_ENV='.\Fuel::$env.' php '.APPPATH.'../../oil r background '.$id;
+			$command = 'FUEL_ENV='.\Fuel::$env.' '.$php.' '.APPPATH.$oil.' r background '.$this->_id;
 			exec($command.' > /dev/null 2>&1 &');
 		}
 		else
 		{
 			// Windows OS
-			$command = 'set FUEL_ENV='.\Fuel::$env.'&php '.APPPATH.'../../oil r background '.$id;
+			$command = 'set FUEL_ENV='.\Fuel::$env.'&'.$php.' '.APPPATH.$oil.' r background '.$this->_id;
 			$fp = @popen('start /B cmd /c "'.$command.'"', 'r');
 			@pclose($fp);
 		}
@@ -147,7 +202,7 @@ class Background
 
 	public function _run()
 	{
-		if (strpos($this->_handler, 'function') === 0)
+		if (is_string($this->_handler) && strpos($this->_handler, 'function') === 0)
 		{
 			eval('$callable = '.$this->_handler.';');
 		}
