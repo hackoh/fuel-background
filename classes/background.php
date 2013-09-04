@@ -63,7 +63,7 @@ class Background
 	public function __construct($handler, $arguments = array())
 	{
 		$this->_handler = static::_to_callable($handler);
-		$this->_arguments = $arguments;
+		$this->set_arguments($arguments);
 	}
 
 	public function run()
