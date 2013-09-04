@@ -113,10 +113,12 @@ class Background
 		}, array($this->_id));
 
 		$queue = static::_queue();
+		
 		if ( ! count($queue))
 		{
 			$this->run();
 		}
+
 		static::_push($this);
 	}
 
@@ -200,6 +202,11 @@ class Background
 		return $this;
 	}
 
+	public function id()
+	{
+		return $this->_id;
+	}
+
 	public function _run()
 	{
 		if (is_string($this->_handler) && strpos($this->_handler, 'function') === 0)
@@ -221,14 +228,8 @@ class Background
 		{
 			$result = $e;
 		}
-		$this->_completed_at = time();
 
-		if (\Arr::get($this->_arguments, 0) instanceof \Exception)
-		{
-			$this->set_arguments(array());
-		}
-
-		\Cache::set('background.'.$this->_id, $this);
+		\Cache::delete('background.'.$this->_id);
 
 		$this->trigger('after');
 
