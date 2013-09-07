@@ -16,6 +16,8 @@ namespace Background;
 class Background
 {
 
+	protected static $_lock = true;
+
 	protected $_id;
 	protected $_handler;
 	protected $_arguments;
@@ -33,6 +35,11 @@ class Background
 	public static function _init()
 	{
 		\Config::load('background', true);
+
+		if (static::$_lock)
+		{
+			static::$_lock = @fopen(sys_get_temp_dir().'/fuel-background.lock', 'w');
+		}
 	}
 
 	public static function forge($handler, $arguments = array())
@@ -54,12 +61,12 @@ class Background
 			}
 			else
 			{
-				throw new \InvalidArgumentException('Can\'t parse the specify closure.');
+				throw new \InvalidArgumentException('Can\'t parse the closure specified.');
 			}
 		}
 		elseif ( ! is_callable($var))
 		{
-			throw new \InvalidArgumentException('Can\'t parse the specify handler.');
+			throw new \InvalidArgumentException('Can\'t parse the handler specified.');
 		}
 		return $var;
 	}
@@ -85,16 +92,43 @@ class Background
 		\Cache::set('background.queue', $queue);
 	}
 
-	public static function end($id)
+	protected static function _lock($lock = true)
 	{
+		if (static::$_lock)
+		{
+			if ($lock)
+			{
+				flock(static::$_lock, LOCK_EX);
+			}
+			else
+			{
+				flock(static::$_lock, LOCK_UN);
+			}
+		}
+	}
+
+	public static function _end($id, $fork = false)
+	{
+		static::_lock();
+
 		$queue = static::_queue();
 		\Arr::delete($queue, $id);
 		\Cache::set('background.queue', $queue);
 
+		static::_lock(false);
+
 		if ($queue)
 		{
 			$background = current($queue);
-			$background->_run();
+
+			if ($fork)
+			{
+				$background->run();
+			}
+			else
+			{
+				$background->_run();
+			}
 		}
 	}
 
@@ -108,8 +142,10 @@ class Background
 
 	public function queue()
 	{
+		static::_lock();
+
 		$this->on('after', function($id) {
-			Background::end($id);
+			Background::_end($id);
 		}, array($this->_id));
 
 		$queue = static::_queue();
@@ -120,6 +156,8 @@ class Background
 		}
 
 		static::_push($this);
+
+		static::_lock(false);
 	}
 
 	public function run()
