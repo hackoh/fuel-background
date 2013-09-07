@@ -2,16 +2,20 @@
 
 This package allows you to create the process in your app context.
 
+- If you use closure, you need specify top namespace like "\Email::forge()" 
+
 # Usage
 
 
+	// Closure
 	Background::forge(function() {
 
 		// very large process will run background.
 
 	})->run();
 	
-	
+	// Handler
+	Background::forge(array($email, 'send'))->run();
 
 Example:
 
@@ -68,3 +72,66 @@ Events:
 
 	- exception
 		when the process throw some exceptions.
+
+Queuing:
+
+	// Normal running
+	
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(1);
+		}
+	})->run();
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(2);
+		}
+	})->run();
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(3);
+		}
+	})->run();
+
+	// 1
+	// 2
+	// 3
+	// 1
+	// 2
+	// 3
+
+	// - This means that three processes exist.
+
+
+	// Queuing
+
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(1);
+		}
+	})->queue();
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(2);
+		}
+	})->queue();
+	Background::forge(function() {
+		for ($i = 0; $i < 2; $i++)
+		{
+			\Log::warning(3);
+		}
+	})->queue();
+
+	// 1
+	// 1
+	// 2
+	// 2
+	// 3
+	// 3
+
+	// - This means that only one process exists.
